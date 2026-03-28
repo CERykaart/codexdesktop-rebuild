@@ -159,17 +159,9 @@ async function syncMac(macInfo) {
     fs.rmSync(extractDir, { recursive: true });
   }
   fs.mkdirSync(extractDir, { recursive: true });
-  if (process.platform === "darwin") {
-    // ditto 是 macOS 原生工具，能处理 Sparkle 非标准 ZIP
-    execSync(`ditto -xk "${zipPath}" "${extractDir}" 2>/dev/null || true`);
-  } else {
-    // Linux/CI: 用 7z 做回退（比 unzip 兼容性更好）
-    try {
-      execSync(`unzip -q -o "${zipPath}" -d "${extractDir}"`);
-    } catch {
-      execSync(`7z x -y -o"${extractDir}" "${zipPath}" > /dev/null`);
-    }
-  }
+  // Sparkle ZIP has non-standard structure. Use 7zz (modern 7-Zip) everywhere.
+  // || true: Sparkle ZIP may trigger minor CRC warnings but still extracts fine.
+  execSync(`7zz x -y -o"${extractDir}" "${zipPath}" > /dev/null 2>&1 || true`);
 
   // 找到 .app/Contents/Resources/app.asar
   const appDir = findFile(extractDir, "app.asar");
@@ -218,13 +210,8 @@ async function syncWin(winInfo) {
     fs.rmSync(extractDir, { recursive: true });
   }
   fs.mkdirSync(extractDir, { recursive: true });
-  // 优先 7zz (7-Zip 官方)，回退 7z (p7zip)，最后 unzip
-  const sevenZipBin = findBinary(["7zz", "7z"]);
-  if (sevenZipBin) {
-    execSync(`"${sevenZipBin}" x -y -o"${extractDir}" "${msixPath}" > /dev/null 2>&1 || true`);
-  } else {
-    execSync(`unzip -q -o "${msixPath}" -d "${extractDir}"`);
-  }
+  // MSIX is ZIP with APPX signature block. Use 7zz consistently.
+  execSync(`7zz x -y -o"${extractDir}" "${msixPath}" > /dev/null 2>&1 || true`);
 
   // 在 MSIX 中找 app.asar
   // MSIX 结构: app/resources/app.asar 或直接 resources/app.asar
@@ -304,16 +291,6 @@ function syncDirectory(srcDir, destDir) {
 }
 
 // ─── 辅助 ────────────────────────────────────────────────────────
-function findBinary(candidates) {
-  for (const bin of candidates) {
-    try {
-      execSync(`which "${bin}" 2>/dev/null`, { stdio: "pipe" });
-      return bin;
-    } catch {}
-  }
-  return null;
-}
-
 function findFile(dir, name) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const e of entries) {
