@@ -162,14 +162,35 @@ async function syncMac(macInfo) {
     fs.rmSync(extractDir, { recursive: true });
   }
   fs.mkdirSync(extractDir, { recursive: true });
-  // Sparkle ZIP has non-standard structure. Use 7zz (modern 7-Zip) everywhere.
-  // || true: Sparkle ZIP may trigger minor CRC warnings but still extracts fine.
-  execSync(`7zz x -y -o"${extractDir}" "${zipPath}" > /dev/null 2>&1 || true`);
+  // Sparkle ZIP has non-standard structure — try multiple tools
+  let extracted = false;
+  for (const cmd of [
+    `7zz x -y -o"${extractDir}" "${zipPath}"`,
+    `7z x -y -o"${extractDir}" "${zipPath}"`,
+    `unzip -o "${zipPath}" -d "${extractDir}"`,
+  ]) {
+    try {
+      execSync(cmd, { stdio: "pipe" });
+      extracted = true;
+      break;
+    } catch (e) {
+      // Check if files were extracted despite error (CRC warnings etc)
+      if (findFile(extractDir, "app.asar")) {
+        extracted = true;
+        break;
+      }
+    }
+  }
 
   // 找到 .app/Contents/Resources/app.asar
   const appDir = findFile(extractDir, "app.asar");
   if (!appDir) {
-    throw new Error("macOS ZIP 中未找到 app.asar");
+    // Diagnostic: list what was extracted
+    try {
+      const contents = execSync(`ls -R "${extractDir}" | head -30`, { encoding: "utf-8" });
+      console.log("  [!] Extract dir contents:", contents);
+    } catch {}
+    throw new Error("macOS ZIP: app.asar not found after extraction");
   }
   console.log(`  📍 找到: ${path.relative(extractDir, appDir)}`);
 
@@ -220,17 +241,12 @@ async function syncWin(winInfo) {
   // MSIX 结构: app/resources/app.asar 或直接 resources/app.asar
   const asarPath = findFile(extractDir, "app.asar");
   if (!asarPath) {
-    // 列出内容帮助调试
-    const files = execSync(`find "${extractDir}" -maxdepth 4 -type f`)
-      .toString()
-      .trim()
-      .split("\n")
-      .slice(0, 30);
-    console.log("  ⚠️  MSIX 内容:");
-    files.forEach((f) =>
-      console.log(`    ${path.relative(extractDir, f)}`)
-    );
-    throw new Error("Windows MSIX 中未找到 app.asar");
+    // Diagnostic: list top-level contents (cross-platform)
+    try {
+      const entries = fs.readdirSync(extractDir);
+      console.log("  [!] MSIX extract contents:", entries.slice(0, 20).join(", "));
+    } catch {}
+    throw new Error("Windows MSIX: app.asar not found after extraction");
   }
   console.log(`  📍 找到: ${path.relative(extractDir, asarPath)}`);
 
