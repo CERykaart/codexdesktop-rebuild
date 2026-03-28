@@ -263,6 +263,7 @@ module.exports = {
         "file-uri-to-path",      // bindings 的运行时依赖
         "node-addon-api",        // N-API 辅助（better-sqlite3 运行时需要）
         "node-pty",              // 终端模拟原生模块
+        "tslib",                 // TypeScript 运行时辅助（product-name bundle require）
       ]);
 
       // 平台条件依赖
