@@ -145,10 +145,13 @@ async function syncMac(macInfo) {
   const zipPath = path.join(TEMP_DIR, `Codex-mac-${macInfo.version}.zip`);
   const extractDir = path.join(TEMP_DIR, "mac-extract");
 
-  // 下载
+  // 下载 (curl is more reliable than Node https for large files in CI)
   if (!fs.existsSync(zipPath)) {
     console.log(`\n📥 下载 macOS ZIP: ${macInfo.version}`);
-    await downloadToFile(macInfo.downloadUrl, zipPath, "macOS");
+    execSync(
+      `curl -L --retry 3 --retry-delay 2 -o "${zipPath}" "${macInfo.downloadUrl}"`,
+      { stdio: "inherit" }
+    );
   } else {
     console.log(`\n📦 使用缓存: ${zipPath}`);
   }
