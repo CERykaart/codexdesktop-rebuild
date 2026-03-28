@@ -234,8 +234,23 @@ async function syncWin(winInfo) {
     fs.rmSync(extractDir, { recursive: true });
   }
   fs.mkdirSync(extractDir, { recursive: true });
-  // MSIX is ZIP with APPX signature block. Use 7zz consistently.
-  execSync(`7zz x -y -o"${extractDir}" "${msixPath}" > /dev/null 2>&1 || true`);
+  // MSIX is ZIP with APPX signature block. Try multiple tools.
+  let msixExtracted = false;
+  for (const cmd of [
+    `7zz x -y -o"${extractDir}" "${msixPath}"`,
+    `7z x -y -o"${extractDir}" "${msixPath}"`,
+  ]) {
+    try {
+      execSync(cmd, { stdio: "pipe" });
+      msixExtracted = true;
+      break;
+    } catch (e) {
+      if (findFile(extractDir, "app.asar")) {
+        msixExtracted = true;
+        break;
+      }
+    }
+  }
 
   // 在 MSIX 中找 app.asar
   // MSIX 结构: app/resources/app.asar 或直接 resources/app.asar
