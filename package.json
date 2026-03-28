@@ -51,6 +51,7 @@
     "better-sqlite3": "^12.4.6",
     "electron-context-menu": "^4.1.1",
     "electron-squirrel-startup": "^1.0.1",
+    "encoding": "^0.1.13",
     "immer": "^10.1.1",
     "lodash": "^4.17.21",
     "memoizee": "^0.4.15",
