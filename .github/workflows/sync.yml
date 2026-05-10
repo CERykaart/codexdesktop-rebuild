@@ -73,7 +73,6 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          npm install @cometix/codex@latest
 
       - name: Install tools
         run: |
@@ -83,21 +82,16 @@ jobs:
         run: node scripts/sync-upstream.js --force --skip-win
 
       - name: Patch
-        run: node scripts/patch-all.js unix
+        run: node scripts/patch-all.js mac-${{ matrix.arch }}
 
       - name: Build
         run: npm run build:mac-${{ matrix.arch }}
-        env:
-          SKIP_SIGN: "true"
-          SKIP_NOTARIZE: "true"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Codex-macOS-${{ matrix.arch }}
-          path: |
-            out/make/*.dmg
-            out/make/zip/**/*.zip
+          path: out/*.dmg
           if-no-files-found: error
 
   build-windows:
@@ -117,7 +111,6 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          npm install @cometix/codex@latest
 
       - name: Install tools
         run: |
@@ -138,12 +131,10 @@ jobs:
         run: npm run build:win-x64
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Codex-Windows-x64
-          path: |
-            out/make/squirrel.windows/**/*
-            out/make/zip/**/*.zip
+          path: out/*.zip
           if-no-files-found: error
 
   build-linux:
@@ -172,19 +163,18 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          npm install @cometix/codex@latest
 
       - name: Sync upstream (macOS ZIP for unix, skip Windows)
         run: node scripts/sync-upstream.js --force --skip-win
 
       - name: Patch
-        run: node scripts/patch-all.js unix
+        run: node scripts/patch-all.js mac-${{ matrix.arch }}
 
       - name: Build
         run: npm run build:linux-${{ matrix.arch }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Codex-Linux-${{ matrix.arch }}
           path: |
@@ -220,12 +210,14 @@ jobs:
         id: version
         run: |
           RESULT=$(node scripts/check-update.js --json --force)
-          MAC_VER=$(echo "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.macOS?.version||'')}catch{console.log('')}})")
+          MAC_ARM64=$(echo "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.['macOS-arm64']?.version||'')}catch{console.log('')}})")
+          MAC_X64=$(echo "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.['macOS-x64']?.version||'')}catch{console.log('')}})")
           WIN_VER=$(echo "$RESULT" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.platforms?.Windows?.version||'')}catch{console.log('')}})")
 
-          VERSION="${MAC_VER:-$WIN_VER}"
+          VERSION="${MAC_ARM64:-${MAC_X64:-$WIN_VER}}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "mac_version=$MAC_VER" >> "$GITHUB_OUTPUT"
+          echo "mac_arm64=$MAC_ARM64" >> "$GITHUB_OUTPUT"
+          echo "mac_x64=$MAC_X64" >> "$GITHUB_OUTPUT"
           echo "win_version=$WIN_VER" >> "$GITHUB_OUTPUT"
 
           if [ -z "$VERSION" ]; then echo "No version detected"; exit 0; fi
@@ -247,7 +239,7 @@ jobs:
           git push origin HEAD --tags
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -256,14 +248,18 @@ jobs:
 
       - name: Create Release
         if: steps.version.outputs.version != ''
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Codex ${{ steps.version.outputs.version }}
           body: |
             ## Upstream Versions
-            - **macOS / Linux**: `${{ steps.version.outputs.mac_version || 'N/A' }}`
-            - **Windows**: `${{ steps.version.outputs.win_version || 'N/A' }}`
+            | Platform | Version |
+            |----------|---------|
+            | macOS arm64 | `${{ steps.version.outputs.mac_arm64 || 'N/A' }}` |
+            | macOS x64 | `${{ steps.version.outputs.mac_x64 || 'N/A' }}` |
+            | Windows x64 | `${{ steps.version.outputs.win_version || 'N/A' }}` |
+            | Linux | uses macOS ASAR |
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.zip

@@ -29,21 +29,15 @@ jobs:
           cache: npm
       - run: |
           npm ci
-          npm install @cometix/codex@latest
       - run: |
           brew install --quiet sevenzip
       - run: node scripts/sync-upstream.js --force --skip-win
-      - run: node scripts/patch-all.js unix
+      - run: node scripts/patch-all.js mac-${{ matrix.arch }}
       - run: npm run build:mac-${{ matrix.arch }}
-        env:
-          SKIP_SIGN: "true"
-          SKIP_NOTARIZE: "true"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Codex-macOS-${{ matrix.arch }}
-          path: |
-            out/make/*.dmg
-            out/make/zip/**/*.zip
+          path: out/*.dmg
 
   build-windows:
     if: inputs.platform == 'all' || inputs.platform == 'windows'
@@ -56,7 +50,6 @@ jobs:
           cache: npm
       - run: |
           npm ci
-          npm install @cometix/codex@latest
       - run: |
           choco install 7zip -y
       - name: Add 7zz alias
@@ -66,12 +59,10 @@ jobs:
       - run: node scripts/sync-upstream.js --force --skip-mac
       - run: node scripts/patch-all.js win
       - run: npm run build:win-x64
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Codex-Windows-x64
-          path: |
-            out/make/squirrel.windows/**/*
-            out/make/zip/**/*.zip
+          path: out/*.zip
 
   build-linux:
     if: inputs.platform == 'all' || inputs.platform == 'linux'
@@ -88,14 +79,13 @@ jobs:
           cache: npm
       - run: |
           npm ci
-          npm install @cometix/codex@latest
       - run: |
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot dpkg 7zip
       - run: node scripts/sync-upstream.js --force --skip-win
-      - run: node scripts/patch-all.js unix
+      - run: node scripts/patch-all.js mac-${{ matrix.arch }}
       - run: npm run build:linux-${{ matrix.arch }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Codex-Linux-${{ matrix.arch }}
           path: |
